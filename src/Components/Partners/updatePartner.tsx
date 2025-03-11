@@ -1,7 +1,5 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
-import { AiOutlineClose, AiOutlineDown } from "react-icons/ai"; // Import the down arrow icon
+import { AiOutlineClose, AiOutlineDown } from "react-icons/ai";
 
 interface Area {
   id: string;
@@ -15,29 +13,70 @@ interface Partner {
   phone: string;
   status: string;
   currentLoad: number;
-  areas: string[];
-  shift: { start: string; end: string };
-  metrics: { rating: number; completedOrders: number; cancelledOrders: number };
+  areas: string[]; // Ensure areas is always an array of strings
+  shift: { start: string; end: string }; // Shift as an object
+  metrics: { rating: number; completedOrders: number; cancelledOrders: number }; // Metrics as an object
   orders: { id: string; orderNumber: string; status: string }[];
 }
 
-interface CreatePartnerProps {
+interface UpdatePartnerProps {
   onClose: () => void;
-  onCreatePartner: () => void;
-  newPartner: Partner;
-  setNewPartner: React.Dispatch<React.SetStateAction<Partner>>;
+  onUpdatePartner: (updatedPartner: Partner) => void;
+  partner: Partner;
 }
 
-const CreatePartner: React.FC<CreatePartnerProps> = ({
+const UpdatePartner: React.FC<UpdatePartnerProps> = ({
   onClose,
-  onCreatePartner,
-  newPartner,
-  setNewPartner,
+  onUpdatePartner,
+  partner,
 }) => {
   const [error, setError] = useState<string | null>(null);
   const [areas, setAreas] = useState<Area[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
-  const dropdownRef = useRef<HTMLDivElement>(null); // Ref for the dropdown container
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Ensure partner.areas is always an array
+  const initialAreas = Array.isArray(partner.areas)
+    ? partner.areas
+    : typeof partner.areas === "string"
+    ? partner.areas.split(", ")
+    : [];
+
+  // Parse the metrics string into an object
+  const parseMetrics = (metricsString: string) => {
+    const metrics = {
+      rating: 0,
+      completedOrders: 0,
+      cancelledOrders: 0,
+    };
+
+    if (typeof metricsString === "string") {
+      metricsString.split(", ").forEach((part) => {
+        if (part.startsWith("Rating:")) {
+          metrics.rating = parseFloat(part.replace("Rating:", "").trim());
+        } else if (part.startsWith("Completed:")) {
+          metrics.completedOrders = parseInt(part.replace("Completed:", "").trim(), 10);
+        } else if (part.startsWith("Cancelled:")) {
+          metrics.cancelledOrders = parseInt(part.replace("Cancelled:", "").trim(), 10);
+        }
+      });
+    }
+
+    return metrics;
+  };
+
+  // Parse the shift string into an object
+  const parseShift = (shiftString: string) => {
+    const [start, end] = shiftString.split(" - ");
+    return { start, end };
+  };
+
+  const [updatedPartner, setUpdatedPartner] = useState<Partner>({
+    ...partner,
+    areas: initialAreas, // Ensure areas is always an array
+    metrics: typeof partner.metrics === "string" ? parseMetrics(partner.metrics) : partner.metrics, // Parse metrics string into an object
+    shift: typeof partner.shift === "string" ? parseShift(partner.shift) : partner.shift, // Parse shift string into an object
+  });
 
   // Fetch areas when the component mounts
   useEffect(() => {
@@ -62,14 +101,11 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
       ) {
-        setIsDropdownOpen(false); // Close the dropdown
+        setIsDropdownOpen(false);
       }
     };
 
-    // Attach the event listener
     document.addEventListener("mousedown", handleClickOutside);
-
-    // Cleanup the event listener
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -77,12 +113,12 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onCreatePartner();
+    onUpdatePartner(updatedPartner);
     onClose();
   };
 
   const handleAreaChange = (areaName: string) => {
-    setNewPartner((prev) => {
+    setUpdatedPartner((prev) => {
       const updatedAreas = prev.areas.includes(areaName)
         ? prev.areas.filter((area) => area !== areaName)
         : [...prev.areas, areaName];
@@ -97,7 +133,7 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
   return (
     <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center">
       <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl relative border-2 border-slate-200 top-10 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Create New Partner</h2>
+        <h2 className="text-xl font-bold mb-4">Update Partner</h2>
         <button
           onClick={onClose}
           className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
@@ -114,8 +150,8 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Name</label>
               <input
                 type="text"
-                value={newPartner.name}
-                onChange={(e) => setNewPartner((prev) => ({ ...prev, name: e.target.value }))}
+                value={updatedPartner.name}
+                onChange={(e) => setUpdatedPartner((prev) => ({ ...prev, name: e.target.value }))}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                 required
               />
@@ -126,8 +162,8 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
-                value={newPartner.email}
-                onChange={(e) => setNewPartner((prev) => ({ ...prev, email: e.target.value }))}
+                value={updatedPartner.email}
+                onChange={(e) => setUpdatedPartner((prev) => ({ ...prev, email: e.target.value }))}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                 required
               />
@@ -138,8 +174,8 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Phone</label>
               <input
                 type="text"
-                value={newPartner.phone}
-                onChange={(e) => setNewPartner((prev) => ({ ...prev, phone: e.target.value }))}
+                value={updatedPartner.phone}
+                onChange={(e) => setUpdatedPartner((prev) => ({ ...prev, phone: e.target.value }))}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                 required
               />
@@ -149,8 +185,8 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700">Status</label>
               <select
-                value={newPartner.status}
-                onChange={(e) => setNewPartner((prev) => ({ ...prev, status: e.target.value }))}
+                value={updatedPartner.status}
+                onChange={(e) => setUpdatedPartner((prev) => ({ ...prev, status: e.target.value }))}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                 required
               >
@@ -164,9 +200,9 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Current Load</label>
               <input
                 type="number"
-                value={newPartner.currentLoad}
+                value={updatedPartner.currentLoad}
                 onChange={(e) =>
-                  setNewPartner((prev) => ({
+                  setUpdatedPartner((prev) => ({
                     ...prev,
                     currentLoad: parseInt(e.target.value) || 0,
                   }))
@@ -188,11 +224,11 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
                   className="mt-1 flex items-center justify-between w-full border border-gray-300 rounded-md shadow-sm p-2 text-left bg-white"
                 >
                   <span>
-                    {newPartner.areas.length > 0
-                      ? newPartner.areas.join(", ")
+                    {updatedPartner.areas.length > 0
+                      ? updatedPartner.areas.join(", ")
                       : "Select areas"}
                   </span>
-                  <AiOutlineDown className="w-4 h-4 text-gray-500" /> {/* Icon on the right */}
+                  <AiOutlineDown className="w-4 h-4 text-gray-500" />
                 </button>
                 {isDropdownOpen && (
                   <div className="absolute z-10 mt-2 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
@@ -204,7 +240,7 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
                         <input
                           type="checkbox"
                           id={area.id}
-                          checked={newPartner.areas.includes(area.name)}
+                          checked={updatedPartner.areas.includes(area.name)}
                           onChange={() => handleAreaChange(area.name)}
                           className="mr-2"
                         />
@@ -221,9 +257,9 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Shift Start</label>
               <input
                 type="time"
-                value={newPartner.shift.start}
+                value={updatedPartner.shift.start}
                 onChange={(e) =>
-                  setNewPartner((prev) => ({
+                  setUpdatedPartner((prev) => ({
                     ...prev,
                     shift: { ...prev.shift, start: e.target.value },
                   }))
@@ -237,9 +273,9 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Shift End</label>
               <input
                 type="time"
-                value={newPartner.shift.end}
+                value={updatedPartner.shift.end}
                 onChange={(e) =>
-                  setNewPartner((prev) => ({
+                  setUpdatedPartner((prev) => ({
                     ...prev,
                     shift: { ...prev.shift, end: e.target.value },
                   }))
@@ -254,9 +290,9 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               <label className="block text-sm font-medium text-gray-700">Rating</label>
               <input
                 type="number"
-                value={newPartner.metrics.rating}
+                value={updatedPartner.metrics.rating}
                 onChange={(e) =>
-                  setNewPartner((prev) => ({
+                  setUpdatedPartner((prev) => ({
                     ...prev,
                     metrics: { ...prev.metrics, rating: parseFloat(e.target.value) || 0 },
                   }))
@@ -276,7 +312,7 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
               type="submit"
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
             >
-              Create Partner
+              Update Partner
             </button>
           </div>
         </form>
@@ -285,4 +321,4 @@ const CreatePartner: React.FC<CreatePartnerProps> = ({
   );
 };
 
-export default CreatePartner;
+export default UpdatePartner;

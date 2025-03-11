@@ -59,9 +59,9 @@ export default function Dashboard() {
         const [metricsRes, partnersRes, ordersRes, assignmentsRes] =
           await Promise.all([
             axios.get<Metrics>(`${API_BASE_URL}/assignments/metrics`),
-            axios.get<Partner[]>(`${API_BASE_URL}/partners/available`),
+            axios.get<Partner[]>(`${API_BASE_URL}/partners/available`), //done
             axios.get<Order[]>(`${API_BASE_URL}/orders/active`),
-            axios.get(`${API_BASE_URL}/assignments/recent-assignments`),
+            axios.get(`${API_BASE_URL}/assignments/recent-assignments`), //done
           ]);
 
         // Set metrics, partners, and orders
@@ -92,6 +92,10 @@ export default function Dashboard() {
     };
 
     fetchData();
+    console.log(metrics)
+    console.log(partners)
+    console.log(orders)
+    console.log(assignments)
   }, []);
 
   // Initialize Map
@@ -119,27 +123,32 @@ export default function Dashboard() {
 
     // Add markers for orders
     orders.forEach((order) => {
-      const marker = new Feature({
-        geometry: new Point(
-          fromLonLat([order.location.lng, order.location.lat])
-        ),
-      });
-      marker.setStyle(
-        new Style({
-          image: new Icon({
-            src: "https://openlayers.org/en/latest/examples/data/icon.png",
-            scale: 0.5,
-          }),
-        })
-      );
-      vectorSource.addFeature(marker);
+      // Check if order.location is defined
+      if (order.location && order.location.lng !== undefined && order.location.lat !== undefined) {
+        const marker = new Feature({
+          geometry: new Point(
+            fromLonLat([order.location.lng, order.location.lat])
+          ),
+        });
+        marker.setStyle(
+          new Style({
+            image: new Icon({
+              src: "https://openlayers.org/en/latest/examples/data/icon.png",
+              scale: 0.5,
+            }),
+          })
+        );
+        vectorSource.addFeature(marker);
+      } else {
+        console.warn("Order location is undefined or incomplete:", order);
+      }
     });
 
     return () => map.setTarget(undefined);
   }, [orders]);
 
   return (
-    <div className="mx-auto p-6 text-black">
+    <div className="mx-auto p-6 text-black ">
       <h1 className="text-2xl font-bold mb-6">📊 Dashboard</h1>
       {loading && <p>Loading...</p>}
       {error && <p className="text-red-500">{error}</p>}

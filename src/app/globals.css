@@ -24,3 +24,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+/* Apply globally */
+html, body {
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+/* Hide scrollbar globally but allow scrolling */
+.hide-scrollbar {
+  overflow: auto !important; /* Enable scrolling */
+  scrollbar-width: none !important; /* Hide scrollbar in Firefox */
+  -ms-overflow-style: none !important; /* Hide scrollbar in IE/Edge */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important; /* Hide scrollbar in Chrome, Safari, and Opera */
+}

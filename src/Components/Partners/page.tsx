@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, SetStateAction } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SearchBar from "../Common/SearchBar/searchBar";
 import Table from "../Common/Table/table";
 import Pagination from "../Common/Pagination/pagination";
-import Modal from "../Common/Modal/modal";
-import Filters from "../Common/Filters/fliters";
 import CreatePartner from "./createPartner";
-// import CreateArea from "./CreateArea";
+import UpdatePartner from "./updatePartner";
 import AreaModal from "./area";
+import MessageModal from "../Common/Modal/messageModal";
+import Filters from "../Common/Filters/filters";
 
 interface Partner {
   id: string;
@@ -18,7 +18,7 @@ interface Partner {
   phone: string;
   status: string;
   currentLoad: number;
-  areas: string[]; // Ensure areas is an array of strings
+  areas: string[];
   shift: {
     start: string;
     end: string;
@@ -46,6 +46,7 @@ interface Filters {
   status: string;
 }
 
+
 const PartnersPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,41 +63,46 @@ const PartnersPage = () => {
     status: searchParams.get("status") || "",
   });
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
-  const [isCreateAreaModalOpen, setIsCreateAreaModalOpen] = useState<boolean>(false);
   const [isAreaModalOpen, setIsAreaModalOpen] = useState<boolean>(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
+  const [partnerToUpdate, setPartnerToUpdate] = useState<Partner | null>(null);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState<boolean>(false);
+  const [messageModalTitle, setMessageModalTitle] = useState<string>("");
+  const [messageModalMessage, setMessageModalMessage] = useState<string>("");
+
   const [newPartner, setNewPartner] = useState<Partner>({
     id: "",
     name: "",
     email: "",
     phone: "",
-    status: "ACTIVE", // Default status
+    status: "ACTIVE",
     currentLoad: 0,
-    areas: [], // Array of strings
-    shift: { start: "", end: "" }, // Shift object
-    metrics: { rating: 0, completedOrders: 0, cancelledOrders: 0 }, // Metrics object
+    areas: [],
+    shift: { start: "", end: "" },
+    metrics: { rating: 0, completedOrders: 0, cancelledOrders: 0 },
     orders: [],
   });
 
-
-  // Fetch partners data
   const fetchPartners = async () => {
     setLoading(true);
     setError(null);
     try {
-      const query = new URLSearchParams({
+      const queryParams = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
         status: filters.status,
-        search: searchQuery,
-      }).toString();
-
-      const apiUrl = `${process.env.NEXT_PUBLIC_BACKEND_API}/partners?${query}`;
+      });
+  
+      // Only add the search parameter if searchQuery is not empty
+      if (searchQuery) {
+        queryParams.append("search", searchQuery);
+      }
+  
+      const apiUrl = `${process.env.NEXT_PUBLIC_BACKEND_API}/partners?${queryParams.toString()}`;
       const res = await fetch(apiUrl);
       if (!res.ok) throw new Error("Failed to fetch partners");
-
+  
       const data = await res.json();
       setPartners(data.data || []);
       setPagination(data.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 });
@@ -109,84 +115,56 @@ const PartnersPage = () => {
     }
   };
 
-  // Handle search
   const handleSearch = () => {
-    fetchPartners();
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page on new search
+    fetchPartners(); // Perform search
   };
 
   // Clear search query
   const handleClearSearch = () => {
     setSearchQuery("");
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page on clear search
     fetchPartners();
   };
 
-  // Handle filter changes
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
-  };
 
-  // Apply filters and refresh data
-  const applyFilters = () => {
-    const query = new URLSearchParams({
-      ...filters,
-      page: "1",
-    }).toString();
-    router.push(`/partners?${query}`);
-    fetchPartners();
-  };
 
-  // Reset filters
+  const applyFilters = (filters: { status: string; fromDate?: string; toDate?: string }) => {
+    setFilters(filters); // Update filters state
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
+    fetchPartners(); // Fetch data with new filters
+  };
+  
   const resetFilters = () => {
-    setFilters({ status: "" });
-    setSearchQuery("");
-    router.push("/partners");
-    fetchPartners();
+    setFilters({ status: "" }); // Reset filters state
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
+    fetchPartners(); // Fetch data without filters
   };
 
   // Handle pagination
   const handlePageChange = (page: number) => {
-    const query = new URLSearchParams({
-      ...filters,
-      page: page.toString(),
-    }).toString();
-    router.push(`/partners?${query}`);
+    setPagination((prev) => ({ ...prev, page }));
     fetchPartners();
   };
 
-  // Open modal with partner details
-  const handleMoreClick = (partner: Partner) => {
-    setSelectedPartner(partner);
-    setIsModalOpen(true);
-  };
 
-  // Close modal
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedPartner(null);
-  };
-
-  // Handle form submission for creating a new partner
   const handleCreatePartner = async () => {
     try {
-      // Ensure correct area format
       const formattedAreas = newPartner.areas.map((area) => ({
         area: {
           connectOrCreate: {
-            where: { name: area }, 
-            create: { name: area } 
-          }
-        }
+            where: { name: area },
+            create: { name: area },
+          },
+        },
       }));
   
       const partnerData = {
         ...newPartner,
-        areas: formattedAreas, // ✅ Fix: Sending correct format
+        areas: formattedAreas,
         shift: newPartner.shift.start && newPartner.shift.end ? newPartner.shift : undefined,
         metrics: newPartner.metrics.rating ? newPartner.metrics : undefined,
       };
-  
-      console.log("Sending data to API:", partnerData); // ✅ Debugging log
   
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}/partners`, {
         method: "POST",
@@ -194,56 +172,74 @@ const PartnersPage = () => {
         body: JSON.stringify(partnerData),
       });
   
-      console.log("API Response Status:", res.status); // ✅ Debugging log
+      if (!res.ok) throw new Error("Failed to create partner");
   
-      const responseText = await res.text(); // Read raw response
-      console.log("API Response Body:", responseText); // ✅ Debugging log
-  
-      if (!res.ok) {
-        throw new Error(`Failed to create partner. Status: ${res.status} - ${responseText}`);
-      }
-  
-      const data = JSON.parse(responseText);
-      console.log("Partner created successfully:", data);
-  
+      const data = await res.json();
       setIsCreateModalOpen(false);
       fetchPartners(); // Refresh the list of partners
+  
+      // Reset the newPartner state
+      setNewPartner({
+        id: "",
+        name: "",
+        email: "",
+        phone: "",
+        status: "ACTIVE",
+        currentLoad: 0,
+        areas: [],
+        shift: { start: "", end: "" },
+        metrics: { rating: 0, completedOrders: 0, cancelledOrders: 0 },
+        orders: [],
+      });
     } catch (error) {
       console.error("Error creating partner:", error);
     }
   };
-  
-  
 
-
-   // ✅ Create new area function
-   const handleCreateArea = async (name: string) => {
+  // Handle updating a partner
+  const handleUpdatePartner = async (updatedPartner: Partner) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}/areas`, {
-        method: "POST",
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}/partners/${updatedPartner.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(updatedPartner),
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to create area");
-      }
+      if (!res.ok) throw new Error("Failed to update partner");
 
       const data = await res.json();
-      console.log("Area created successfully:", data);
-
-      setIsCreateAreaModalOpen(false); // Close modal after creation
+      setIsUpdateModalOpen(false);
+      fetchPartners(); // Refresh the list of partners
     } catch (error) {
-      console.error("Error creating area:", error);
+      console.error("Error updating partner:", error);
     }
   };
-  
 
-  // Fetch partners on component mount or when filters/search/pagination change
+  // Handle deleting a partner
+  const handleDeletePartner = async (partner: Partner) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}/partners/${partner.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete partner");
+
+      fetchPartners(); // Refresh the list of partners
+    } catch (error) {
+      console.error("Error deleting partner:", error);
+    }
+  };
+
+  // Fetch partners on component mount or when filters/pagination change
   useEffect(() => {
     fetchPartners();
-  }, [filters, searchQuery, pagination.page, pagination.limit]);
+  }, [filters, pagination.page, pagination.limit ]); // Removed searchQuery from dependencies
 
+  useEffect(() => {
+    if (searchQuery === "") {
+      fetchPartners();
+    }
+  }, [searchQuery]); // Add searchQuery as a dependency
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <h1 className="text-2xl font-bold mb-6">Delivery Partners</h1>
@@ -256,7 +252,6 @@ const PartnersPage = () => {
       )}
 
       {/* Create Partner Button */}
-      {/* Buttons for Creating Partner & Area */}
       <div className="flex gap-4 mb-4">
         <button
           onClick={() => setIsCreateModalOpen(true)}
@@ -264,12 +259,13 @@ const PartnersPage = () => {
         >
           Create Partner
         </button>
-
-        <button onClick={() => setIsAreaModalOpen(true)} className="bg-green-500 text-white px-4 py-2 rounded">
+        <button
+          onClick={() => setIsAreaModalOpen(true)}
+          className="bg-green-500 text-white px-4 py-2 rounded"
+        >
           Manage Areas
         </button>
       </div>
-
 
       {/* Search Bar */}
       <SearchBar
@@ -281,24 +277,40 @@ const PartnersPage = () => {
       />
 
       {/* Filters */}
-      <Filters
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        onResetFilters={resetFilters}
-        onApplyFilters={applyFilters}
-      />
+      {/* <Filters
+  filters={filters}
+  onResetFilters={resetFilters}
+  onApplyFilters={applyFilters}
+  includeDateFilters={false} 
+/> */}
+
+
+<Filters
+  filters={filters}
+  onResetFilters={resetFilters}
+  onApplyFilters={applyFilters}
+  filterType="partners"
+  statusOptions={[
+    { value: "ACTIVE", label: "Active" },
+    { value: "INACTIVE", label: "Inactive" },
+  ]}
+/>
 
       {/* Table */}
       <Table
         headers={["Name", "Email", "Phone", "Status", "Current Load", "Areas", "Shift", "Metrics"]}
         data={partners.map((partner) => ({
           ...partner,
-          areas: partner.areas.join(", "),
+          areas: partner.areas.map((area: any) => area?.area?.name).join(", "),
           shift: partner.shift ? `${partner.shift.start} - ${partner.shift.end}` : "N/A",
           metrics: `Rating: ${partner.metrics.rating}, Completed: ${partner.metrics.completedOrders}, Cancelled: ${partner.metrics.cancelledOrders}`,
         }))}
         loading={loading}
-        onRowClick={handleMoreClick}
+        onRowClick={(partner) => {
+          setPartnerToUpdate(partner);
+          setIsUpdateModalOpen(true);
+        }}
+        onDelete={handleDeletePartner}
       />
 
       {/* Pagination */}
@@ -308,57 +320,40 @@ const PartnersPage = () => {
         onPageChange={handlePageChange}
       />
 
-      {/* Partner Details Modal */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Partner Details">
-        {selectedPartner ? (
-          <>
-            <p><strong>Name:</strong> {selectedPartner.name}</p>
-            <p><strong>Email:</strong> {selectedPartner.email}</p>
-            <p><strong>Phone:</strong> {selectedPartner.phone}</p>
-            <p><strong>Status:</strong> {selectedPartner.status}</p>
-            <p><strong>Current Load:</strong> {selectedPartner.currentLoad}</p>
-            <p><strong>Areas:</strong> {selectedPartner.areas.join(", ")}</p>
-            <p><strong>Shift:</strong> {selectedPartner.shift ? `${selectedPartner.shift.start} - ${selectedPartner.shift.end}` : "N/A"}</p>
-            <p><strong>Metrics:</strong> Rating: {selectedPartner.metrics.rating}, Completed: {selectedPartner.metrics.completedOrders}, Cancelled: {selectedPartner.metrics.cancelledOrders}</p>
-          </>
-        ) : (
-          <p>No partner selected.</p>
-        )}
-      </Modal>
-
-
+      {/* Create Partner Modal */}
       {isCreateModalOpen && (
-  <CreatePartner
-    onClose={() => setIsCreateModalOpen(false)}
-    onCreatePartner={handleCreatePartner}
-    newPartner={newPartner}
-    setNewPartner={(value: SetStateAction<Partner>) => {
-      if (typeof value === "function") {
-        // If value is a function (e.g., (prevState) => newState), call it with the previous state
-        setNewPartner(value);
-      } else {
-        // If value is a partial object, merge it with the previous state
-        setNewPartner((prevState) => ({
-          ...prevState,
-          ...value,
-          areas: Array.isArray(value?.areas)
-            ? value.areas.map((area: string) => area.trim())
-            : prevState.areas,
-          orders: value?.orders ?? prevState.orders,
-        }));
-      }
-    }}
-  />
-)}
+        <CreatePartner
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreatePartner={handleCreatePartner}
+          newPartner={newPartner}
+          setNewPartner={setNewPartner}
+        />
+      )}
 
+      {/* Update Partner Modal */}
+      {isUpdateModalOpen && partnerToUpdate && (
+        <UpdatePartner
+          onClose={() => setIsUpdateModalOpen(false)}
+          onUpdatePartner={handleUpdatePartner}
+          partner={partnerToUpdate}
+        />
+      )}
 
+      {/* Area Modal */}
+      {isAreaModalOpen && (
+        <AreaModal isOpen={isAreaModalOpen} onClose={() => setIsAreaModalOpen(false)} />
+      )}
 
-{/* {isCreateAreaModalOpen && <CreateArea onClose={() => setIsCreateAreaModalOpen(false)} onCreateArea={handleCreateArea} />} */}
-
-{isAreaModalOpen && 
-<AreaModal isOpen={isAreaModalOpen} onClose={() => setIsAreaModalOpen(false)} />}
+      {/* Message Modal */}
+      <MessageModal
+        isOpen={isMessageModalOpen}
+        onClose={() => setIsMessageModalOpen(false)}
+        title={messageModalTitle}
+        message={messageModalMessage}
+      />
     </div>
   );
 };
 
 export default PartnersPage;
+

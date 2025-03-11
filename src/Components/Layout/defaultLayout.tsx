@@ -14,24 +14,28 @@ const DefaultLayout = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   if (!isMounted) {
-    return <div className="min-h-screen bg-white dark:bg-gray-900" />;
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 hide-scrollbar " />
+    );
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
-      <div className="fixed top-0 z-50 w-full bg-red-500">
+    <div className="min-h-screen hide-scrollbar ">
+      <div className="fixed top-0 z-50 w-full bg-red-500 *:">
         <Navbar />
       </div>
 
-      {/* Main Content */}
-      <main>
-        <div className="justify-center w-full min-h-full overflow-hidden hide-scrollbar mt-16 bg-white text-black">
-          <div className="w-full min-h-screen text-center items-center justify-center space-y-6">
-            <React.Fragment key={pathname}>{children}</React.Fragment>
+      <div className="hide-scrollbar overflow-auto h-screen">
+        <main>
+          <div className="justify-center w-full hide-scrollbar overflow-auto mt-14 bg-white text-black">
+            <div className="w-full hide-scrollbar overflow-auto min-h-screen text-center items-center justify-center space-y-6">
+              <React.Fragment key={pathname}>{children}</React.Fragment>
+            </div>
           </div>
-        </div>
-      </main>
-      <Footer />
+        </main>
+
+        <Footer />
+      </div>
     </div>
   );
 };

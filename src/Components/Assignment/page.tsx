@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SearchBar from "../Common/SearchBar/searchBar";
-import Filters from "../Common/Filters/fliters";
 import Table from "../Common/Table/table";
 import Pagination from "../Common/Pagination/pagination";
 import Modal from "../Common/Modal/modal";
+import Filters from "../Common/Filters/filters";
+import MessageModal from "../Common/Modal/messageModal";
 
 // Define the Assignment type
 interface Assignment {
@@ -27,10 +28,8 @@ interface Pagination {
 
 interface Filters {
   status: string;
-  fromDate: string;
-  toDate: string;
-  orderId: string;
-  partnerId: string;
+  fromDate?: string; // Make fromDate optional
+  toDate?: string;   // Make toDate optional
 }
 
 const Assignments = () => {
@@ -38,6 +37,7 @@ const Assignments = () => {
   const searchParams = useSearchParams();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: 10,
@@ -48,41 +48,39 @@ const Assignments = () => {
     status: searchParams.get("status") || "",
     fromDate: searchParams.get("fromDate") || "",
     toDate: searchParams.get("toDate") || "",
-    orderId: searchParams.get("orderId") || "",
-    partnerId: searchParams.get("partnerId") || "",
   });
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState<boolean>(false);
+  const [messageModalTitle, setMessageModalTitle] = useState<string>("");
+  const [messageModalMessage, setMessageModalMessage] = useState<string>("");
 
   // Fetch assignments data
   const fetchAssignments = async () => {
     setLoading(true);
+    setError(null);
     try {
       const query = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
         status: filters.status,
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
-        orderId: filters.orderId,
-        partnerId: filters.partnerId,
-        search: searchQuery,
+        fromDate: filters.fromDate || "", // Ensure fromDate is a string
+        toDate: filters.toDate || "",     // Ensure toDate is a string
+        search: searchQuery, // Pass searchQuery as a separate parameter
       }).toString();
 
-      // Use the environment variable for the API endpoint
       const apiUrl = `${process.env.NEXT_PUBLIC_BACKEND_API}/assignments/assignment-metrics-details?${query}`;
       const res = await fetch(apiUrl);
-      if (!res.ok) {
-        throw new Error("Failed to fetch assignments");
-      }
-      const data = await res.json();
-      console.log(data); // Debugging
+      if (!res.ok) throw new Error("Failed to fetch assignments");
 
-      setAssignments(data.data);
-      setPagination(data.pagination);
+      const data = await res.json();
+      setAssignments(data.data || []);
+      setPagination(data.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 });
     } catch (error) {
       console.error("Failed to fetch assignments:", error);
+      setError("Failed to fetch assignments. Please try again later.");
+      setAssignments([]);
     } finally {
       setLoading(false);
     }
@@ -90,28 +88,21 @@ const Assignments = () => {
 
   // Handle search
   const handleSearch = () => {
-    fetchAssignments();
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page on new search
+    fetchAssignments(); // Perform search
   };
 
   // Clear search query
   const handleClearSearch = () => {
     setSearchQuery("");
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page on clear search
     fetchAssignments();
   };
 
-  // Handle filter changes
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
-  };
-
   // Apply filters and refresh data
-  const applyFilters = () => {
-    const query = new URLSearchParams({
-      ...filters,
-      page: "1",
-    }).toString();
-    router.push(`/assignments?${query}`);
+  const applyFilters = (filters: Filters) => {
+    setFilters(filters);
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
     fetchAssignments();
   };
 
@@ -121,21 +112,14 @@ const Assignments = () => {
       status: "",
       fromDate: "",
       toDate: "",
-      orderId: "",
-      partnerId: "",
     });
-    setSearchQuery("");
-    router.push("/assignments");
+    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
     fetchAssignments();
   };
 
   // Handle pagination
   const handlePageChange = (page: number) => {
-    const query = new URLSearchParams({
-      ...filters,
-      page: page.toString(),
-    }).toString();
-    router.push(`/assignments?${query}`);
+    setPagination((prev) => ({ ...prev, page }));
     fetchAssignments();
   };
 
@@ -151,17 +135,34 @@ const Assignments = () => {
     setSelectedAssignment(null);
   };
 
-  // Fetch assignments on component mount or when filters/search/pagination change
+  // Fetch assignments on component mount or when filters/pagination change
   useEffect(() => {
     fetchAssignments();
-  }, [filters, searchQuery, pagination.page, pagination.limit]);
+  }, [filters, pagination.page, pagination.limit,]);
+
+
+
+  
+    useEffect(() => {
+      if (searchQuery === "") {
+        fetchAssignments();
+      }
+    }, [searchQuery]);
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <h1 className="text-2xl font-bold mb-6">Assignments</h1>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
+
       {/* Search Bar */}
-      <SearchBar
+  
+<SearchBar
         placeholder="Search by Order ID or Partner ID"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -170,13 +171,24 @@ const Assignments = () => {
       />
 
       {/* Filters */}
-      <Filters
+      {/* <Filters
         filters={filters}
-        onFilterChange={handleFilterChange}
         onResetFilters={resetFilters}
         onApplyFilters={applyFilters}
         includeDateFilters={true}
-      />
+      /> */}
+
+
+<Filters
+  filters={filters}
+  onResetFilters={resetFilters}
+  onApplyFilters={applyFilters}
+  filterType="assignments"
+  statusOptions={[
+    { value: "SUCCESS", label: "Success" },
+    { value: "FAILED", label: "Failed" },
+  ]}
+/>
 
       {/* Table */}
       <Table
@@ -196,20 +208,30 @@ const Assignments = () => {
         onPageChange={handlePageChange}
       />
 
-      {/* Modal */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Assignment Details">
-        {selectedAssignment ? (
-          <>
+      {/* Modal for Assignment Details */}
+      {isModalOpen && selectedAssignment && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title="Assignment Details"
+        >
+          <div className="space-y-4">
             <p><strong>Order ID:</strong> {selectedAssignment.orderId}</p>
             <p><strong>Partner ID:</strong> {selectedAssignment.partnerId}</p>
             <p><strong>Timestamp:</strong> {selectedAssignment.timestamp}</p>
             <p><strong>Status:</strong> {selectedAssignment.status}</p>
             <p><strong>Reason:</strong> {selectedAssignment.reason || "-"}</p>
-          </>
-        ) : (
-          <p>No assignment selected.</p>
-        )}
-      </Modal>
+          </div>
+        </Modal>
+      )}
+
+      {/* Message Modal */}
+      <MessageModal
+        isOpen={isMessageModalOpen}
+        onClose={() => setIsMessageModalOpen(false)}
+        title={messageModalTitle}
+        message={messageModalMessage}
+      />
     </div>
   );
 };
